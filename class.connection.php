@@ -2,6 +2,7 @@
 class Exchange{
 	public $api;
 	public $balances = [];
+	public $test = false;
 	function __construct()
 	{
 		if(!$this->api){
@@ -15,8 +16,8 @@ class Exchange{
 		return new Binance\API( $readKeys->key,$readKeys->secret );
 	}
 
-	public function getBalances(){
-		$balances = $this->api()->balances($ticker);
+	public function getBalances($update=false){
+		$balances = $this->api()->balances();
 		$arv = [];
 		foreach ($balances as $key => $value) {
 			if((float)$value["available"] > 0 || (float)$value["onOrder"] > 0){
@@ -24,6 +25,7 @@ class Exchange{
 			}
 		}
 		$this->balances = $arv;
+		return $this->balances;
 	}
 
 	public function getBalance($key){
@@ -38,6 +40,30 @@ class Exchange{
 	            "btcTotal" => 0
 	        ];
 		}
+	}
+
+	public function buy($symbol,$amount, $prices){
+		$val_btc = $this->getBalance("BTC");
+		if(!$this->test && $val_btc > 0.001){
+			$data = $this->api()->buy($symbol, $amount, $prices, "LIMIT");
+		}
+		/*
+		Reset Balance
+		*/
+		$this->getBalances();
+		return $data;
+
+	}
+
+	public function sell($symbol,$amount, $prices){
+		$val_btc = $this->getBalance($symbol);
+		if(!$this->test){
+			
+		}
+		/*
+		Reset Balance
+		*/
+		$this->getBalances();
 	}
 }
 ?>

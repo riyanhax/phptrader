@@ -10,14 +10,25 @@ $climate->red('PHP AI Trader.');
 $exchange = new Exchange;
 $strategies = new Strategies;
 //print_r($exchange->getBalance("LUN"));
-$strategies->exchange = $exchange->api();
+$strategies->exchange = $exchange;
+$strategies->loadconfig();
 
-$strategies->exchange->chart(["ETHBTC","PPTBTC","LUNBTC"], "1m", function($api, $symbol, $chart) use ($strategies){
+$pair = json_decode(file_get_contents(__DIR__."/symbol.json"));
+
+$pairs = [];
+foreach ($pair as $key => $value) {
+	$pairs[] = $key;
+}
+$strategies->setSymbolConfig($pair);
+$strategies->getDefaultTrend();
+$strategies->test_buy("LUNBTC",5);exit();
+$strategies->exchange->api()->chart($pairs, "1m", function($api, $symbol, $chart) use ($strategies){
 	//echo "{$symbol} chart update\n";
 	//print_r($chart);
 
 	$strategies->setData($chart, $symbol);
 	$strategies->rsi_adx_bb();
+
 });
 /*
 $api->kline(["BTCUSDT", "EOSBTC"], "1m", function($api, $symbol, $chart) {

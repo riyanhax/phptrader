@@ -1,45 +1,60 @@
 <?php
 use \League\CLImate\CLImate;
+
+
 class Strategies{
 	private $data = [];
 	private $climate;
 	public $exchange;
-	private $symbol;
+	public $symbol;
 	private $cacheTable = [];
+	private $config = [];
+	private $symbolConfig = [];
 
 	public function setData($arv, $symbol){
 		//if($this->data) return $this->data;
 		$this->data = $this->makeData($arv);
 		$this->climate = new CLImate;
 		$this->symbol = $symbol;
+		$this->loadconfig();
+	}
+	public function loadconfig(){
+		if($this->config) return $this->config;
+		$this->config = json_decode(file_get_contents(__DIR__."/config.json"));
+		return $this->config;
 	}
 	public function rsi_adx_bb(){
 		
+		//$this->getDefaultTrend();
 		$price = $this->getPrices();
 
-		$BULL_RSI = $this->rsi(14.6);
-		$BEAR_RSI = $this->rsi(10.5);
-		$maSlow = $this->sma(1000.0);
-		$maFast = $this->sma(50.0);
-		$BBands = $this->bb(20.0, 2.0, 2.0);
-		$adx = $this->adx(3.0);
-		$ADX_high = 70.0;
-		$ADX_low = 50.0;
-		$BEAR_high = 60.4;
-		$BEAR_low = 28.2;
-		$BEAR_MOD_high = 1.4;
-		$BEAR_MOD_low = -1.5;
+		$BULL_RSI = $this->rsi($this->config->BULL->rsi);
+		$BEAR_RSI = $this->rsi($this->config->BEAR->rsi);
+		$RSI14 = $this->rsi(14);
 
-		$BULL_high = 85.6;
-		$BULL_low = 42.3;
-		$BULL_MOD_high = 3.2;
-		$BULL_MOD_low = -9;
+		$maSlow = $this->sma($this->config->SMA->long);
+		$maFast = $this->sma($this->config->SMA->short);
+		$BBands = $this->bb($this->config->BBands->TimePeriod, $this->config->BBands->NbDevUp, $this->config->BBands->NbDevDn);
+		$adx = $this->adx($this->config->ADX->adx);
 
 
-		$BBtrend = ["upperThreshold" => 50, "lowerThreshold" => 50];
+		$ADX_high = $this->config->ADX->high;
+		$ADX_low = $this->config->ADX->low;
+		$BEAR_high = $this->config->BEAR->high;
+		$BEAR_low = $this->config->BEAR->low;
+		$BEAR_MOD_high = $this->config->BEAR->mod_high;
+		$BEAR_MOD_low = $this->config->BEAR->mod_low;
 
-		$priceUpperBB = $BBands["lower"] + ($BBands["upper"] - $BBands["lower"]) / 100 * $BBtrend["upperThreshold"];
-		$priceLowerBB = $BBands["lower"] + ($BBands["upper"] - $BBands["lower"]) / 100 * $BBtrend["lowerThreshold"];
+		$BULL_high = $this->config->BULL->high;
+		$BULL_low = $this->config->BULL->low;
+		$BULL_MOD_high = $this->config->BULL->mod_high;
+		$BULL_MOD_low = $this->config->BULL->mod_low;
+
+
+		
+
+		$priceUpperBB = $BBands["lower"] + ($BBands["upper"] - $BBands["lower"]) / 100 * $this->config->BBtrend->upperThreshold;
+		$priceLowerBB = $BBands["lower"] + ($BBands["upper"] - $BBands["lower"]) / 100 * $this->config->BBtrend->lowerThreshold;
 
 		if ($price >= $priceUpperBB) $BBtrend_zone = 'high';
 		if (($price < $priceUpperBB) && ($price > $priceLowerBB)) $BBtrend_zone = 'middle';
@@ -76,9 +91,11 @@ class Strategies{
 		}
 
 		$action = $this->checkStatus();
+
+
 		$this->cacheTable = [];
 
-		if( $rsi < $rsi_low && $BBtrend_zone == 'low' ) {
+		if( $rsi < $rsi_low && $BBtrend_zone == 'low' && $action !== "wait_sell") {
 			
 			$action = "BUY";
 			$this->cacheTable = [
@@ -99,7 +116,7 @@ class Strategies{
 
 			$this->action_buy();
 
-		}else if( $rsi > $rsi_hi && $price >= $priceUpperBB) {
+		}else if( $rsi > $rsi_hi && $price >= $priceUpperBB && $action !== "wait_buy") {
 			$action = "SELL";
 			
 			$this->cacheTable = [
@@ -125,6 +142,7 @@ class Strategies{
 				"Date" => date("d-m-Y h:i:s"),
 				"Symbol" => $this->symbol,
 				"Prices" => $price,
+				"RSI14"	=> $RSI14,
 				"BULL_RSI" => $BULL_RSI, 
 				"BEAR_RSI" => $BEAR_RSI,
 				"maSlow" => $maSlow,
@@ -181,11 +199,17 @@ class Strategies{
         return number_format($adx,8,".","");
 	}
 
+	public function setSymbolConfig($arv=[]){
+		$this->symbolConfig = $arv;
+	}
+
+
 	private function getPrices(){
 		$data = array_pop($this->data["close"]);
 		
 		return number_format($data,8,".","");
 	}
+
 
 	private function makeData($arv){
 		$arvs = [
@@ -216,25 +240,116 @@ class Strategies{
 	}
 
 	private function action_buy(){
-		
-		$arv = json_encode(array_merge(["prices" => $this->getPrices(), "amount" => "", "symbol" => $this->symbol], $this->cacheTable));
-		file_put_contents(__DIR__."/orders/BUY-".$this->symbol.".json",$arv);
+		$arvs = $this->getAmount();
+
+		$arv = json_encode(array_merge($arvs, $this->cacheTable));
+		file_put_contents(__DIR__."/orders/".$this->symbol.".json",$arv);
 	}
 
 	private function action_sell(){
-		$arv = json_encode(array_merge(["prices" => $this->getPrices(), "amount" => "", "symbol" => $this->symbol], $this->cacheTable));
-		file_put_contents(__DIR__."/orders/SELL-".$this->symbol.".json",$arv);
+		$arvs = $this->getAmount();
+		$sell_order = json_encode(array_merge($arvs, $this->cacheTable));
+		$buy_order = file_get_contents(__DIR__."/orders/".$this->symbol.".json");
+		$arv_report = json_encode(["buy" => $buy_order, "sell" => $sell_order]);
+
+		file_put_contents(__DIR__."/report/".$this->symbol."-".date("d-m-Y")."-".".json",$arv_report);
+		unlink(__DIR__."/orders/".$this->symbol.".json");
+	}
+
+	public function test_buy($symbol, $amount){
+		
+	    //print_r($this->getAmount("buy"));
+	    $callJson = $this->getAmount("buy");
+	    /*
+		Array
+		(
+		    [symbol] => LUNBTC
+		    [orderId] => 34060160
+		    [clientOrderId] => OrrtURrf26EBf6U3YhJ4XU
+		    [transactTime] => 1548748191321
+		    [price] => 0.00047250
+		    [origQty] => 21.18000000
+		    [executedQty] => 0.00000000
+		    [cummulativeQuoteQty] => 0.00000000
+		    [status] => NEW
+		    [timeInForce] => GTC
+		    [type] => LIMIT
+		    [side] => BUY
+		    [fills] => Array
+		        (
+		        )
+
+		)
+
+	    */
+	    //print_r($callJson["price"]); exit();
+		$order = $this->exchange->api()->buy($symbol, $callJson["amount"], $callJson["price"]);
+		print_r($order);
+	}
+
+	public function getDefaultTrend(){
+		
+		$data = $this->exchange->getBalances();
+		foreach ($data as $key => $value) {
+			if($key !== "BTC" && $key !== "USDT"){
+				file_put_contents(__DIR__."/orders/".$key."BTC.json",json_encode(["prices" => "", "amount" => number_format(array_sum($value),8,".","")]));
+			}
+		}
+	}
+
+	private function getSymbol(){
+		$symbol = substr($this->symbol, -3);
+		$symbol2 = substr($this->symbol, -4);
+		$gsymbol = "";
+		if ($symbol === 'BTC') {
+			$gsymbol = str_replace('BTC','', $this->symbol);
+		}else if($symbol2 === 'USDT'){
+			$gsymbol = str_replace('USDT','', $this->symbol);
+		}
+
+		return $gsymbol;
+	}
+
+	private function getAmount($type="none"){
+		if($type == "none") return 0;
+		$symbol = $this->symbol;
+		//$config = $this->symbolConfig->{$symbol};
+		$config = new stdClass;
+		$config->currency = 0.01;
+		$this->symbol = "LUNBTC";
+		$depth = $this->exchange->api()->depth($this->symbol);
+
+		
+	    
+	    if($type == "buy"){
+	    	$bid = $this->calPrices(array_keys($depth["bids"])[0], 0.4, "buy");//Buy
+		    $amount = $config->currency / $bid;
+		    return ["amount" => number_format($amount,2,".",""), "price" => number_format($bid,8,".","")];
+		}else if($type == "sell"){
+			$ask = $this->calPrices(array_keys($depth["asks"])[0], 0.4, "sell");//Sell
+			$amount = $this->exchange->getBalance($this->getSymbol())["available"];
+			return ["amount" => number_format($amount,2,".",""), "price" => number_format($ask,8,".","")];
+		}
+
 	}
 
 
+	private function calPrices($prices, $profit, $target=""){
+		if(!$target) return "";
+		if($target == "sell"){
+			$price = (($prices * $profit)/100) + $prices;
+		}else if($target == "buy"){
+			$price = $prices - (($prices * $profit)/100);
+		}
+		return $price;
+	}
+
 	private function checkStatus(){
-		
-		if(file_exists(__DIR__."/orders/BUY-".$this->symbol.".json")){
-			return "Wait Sell";
-		}else if(file_exists(__DIR__."/orders/SELL-".$this->symbol.".json")){
-			return "Wait Buy";
+
+		if(file_exists(__DIR__."/orders/".$this->symbol.".json")){
+			return "wait_sell";
 		}else{
-			return "Wait";
+			return "wait_buy";
 		}
 	}
 }
