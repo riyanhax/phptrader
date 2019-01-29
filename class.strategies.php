@@ -5,6 +5,8 @@ class Strategies{
 	private $climate;
 	public $exchange;
 	private $symbol;
+	private $cacheTable = [];
+
 	public function setData($arv, $symbol){
 		//if($this->data) return $this->data;
 		$this->data = $this->makeData($arv);
@@ -73,13 +75,48 @@ class Strategies{
 			$trend = "maFast";
 		}
 
-		$action = "Wait";
+		$action = $this->checkStatus();
+		$this->cacheTable = [];
+
 		if( $rsi < $rsi_low && $BBtrend_zone == 'low' ) {
 			
 			$action = "BUY";
+			$this->cacheTable = [
+				"Date" => date("d-m-Y h:i:s"),
+				"Symbol" => $this->symbol,
+				"Prices" => $price,
+				"BULL_RSI" => $BULL_RSI, 
+				"BEAR_RSI" => $BEAR_RSI,
+				"maSlow" => $maSlow,
+				"maFast" => $maFast,
+				"BBupper" => $BBands["upper"],
+				"BBmiddle" => $BBands["middle"],
+				"BBlower" => $BBands["lower"],
+				"ADX" => $adx,
+				"Action" => $action,
+				"Trend" => $trend
+			];
+
 			$this->action_buy();
+
 		}else if( $rsi > $rsi_hi && $price >= $priceUpperBB) {
 			$action = "SELL";
+			
+			$this->cacheTable = [
+				"Date" => date("d-m-Y h:i:s"),
+				"Symbol" => $this->symbol,
+				"Prices" => $price,
+				"BULL_RSI" => $BULL_RSI, 
+				"BEAR_RSI" => $BEAR_RSI,
+				"maSlow" => $maSlow,
+				"maFast" => $maFast,
+				"BBupper" => $BBands["upper"],
+				"BBmiddle" => $BBands["middle"],
+				"BBlower" => $BBands["lower"],
+				"ADX" => $adx,
+				"Action" => $action,
+				"Trend" => $trend
+			];
 			$this->action_sell();
 		}
 
@@ -100,6 +137,7 @@ class Strategies{
 				"Trend" => $trend
 			]
 		];
+		
 		$this->climate->table($table);
 	}
 
@@ -179,13 +217,25 @@ class Strategies{
 
 	private function action_buy(){
 		
-		$arv = json_encode(["prices" => $this->getPrices(), "amount" => "", "symbol" => $this->symbol]);
+		$arv = json_encode(array_merge(["prices" => $this->getPrices(), "amount" => "", "symbol" => $this->symbol], $this->cacheTable));
 		file_put_contents(__DIR__."/orders/BUY-".$this->symbol.".json",$arv);
 	}
 
 	private function action_sell(){
-		$arv = json_encode(["prices" => $this->getPrices(), "amount" => "", "symbol" => $this->symbol]);
+		$arv = json_encode(array_merge(["prices" => $this->getPrices(), "amount" => "", "symbol" => $this->symbol], $this->cacheTable));
 		file_put_contents(__DIR__."/orders/SELL-".$this->symbol.".json",$arv);
+	}
+
+
+	private function checkStatus(){
+		
+		if(file_exists(__DIR__."/orders/BUY-".$this->symbol.".json")){
+			return "Wait Sell";
+		}else if(file_exists(__DIR__."/orders/SELL-".$this->symbol.".json")){
+			return "Wait Buy";
+		}else{
+			return "Wait";
+		}
 	}
 }
 ?>
