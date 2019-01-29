@@ -10,6 +10,7 @@ class Strategies{
 	private $cacheTable = [];
 	private $config = [];
 	private $symbolConfig = [];
+	public $pairInfo = "";
 
 	public function setData($arv, $symbol){
 		//if($this->data) return $this->data;
@@ -240,27 +241,9 @@ class Strategies{
 	}
 
 	private function action_buy(){
-		$arvs = $this->getAmount();
-
-		$arv = json_encode(array_merge($arvs, $this->cacheTable));
-		file_put_contents(__DIR__."/orders/".$this->symbol.".json",$arv);
-	}
-
-	private function action_sell(){
-		$arvs = $this->getAmount();
-		$sell_order = json_encode(array_merge($arvs, $this->cacheTable));
-		$buy_order = file_get_contents(__DIR__."/orders/".$this->symbol.".json");
-		$arv_report = json_encode(["buy" => $buy_order, "sell" => $sell_order]);
-
-		file_put_contents(__DIR__."/report/".$this->symbol."-".date("d-m-Y")."-".".json",$arv_report);
-		unlink(__DIR__."/orders/".$this->symbol.".json");
-	}
-
-	public function test_buy($symbol, $amount){
-		
-	    //print_r($this->getAmount("buy"));
-	    $callJson = $this->getAmount("buy");
-	    /*
+		$callJson = $this->getAmount("buy");
+		$order = $this->exchange->buy($this->symbol, $callJson["amount"], $callJson["price"]);
+		/*
 		Array
 		(
 		    [symbol] => LUNBTC
@@ -282,16 +265,48 @@ class Strategies{
 		)
 
 	    */
+
+		if(is_array($order)){
+			$arv = json_encode(array_merge($arvs, $this->cacheTable, $order));
+			file_put_contents(__DIR__."/orders/".$this->symbol.".json",$arv);
+		}
+	}
+
+	private function action_sell(){
+		$callJson = $this->getAmount("sell");
+
+		if(is_array($callJson) && $callJson["amount"] > 0 && $callJson["price"] > 0){
+
+			$order = $this->exchange->sell($this->symbol, $callJson["amount"], $callJson["price"]);
+
+			if($order){
+				$sell_order = json_encode(array_merge($order, $this->cacheTable));
+				$buy_order = file_get_contents(__DIR__."/orders/".$this->symbol.".json");
+
+				$arv_report = json_encode(["buy" => $buy_order, "sell" => $sell_order]);
+
+				file_put_contents(__DIR__."/report/".$this->symbol."-".date("d-m-Y")."-".".json",$arv_report);
+				unlink(__DIR__."/orders/".$this->symbol.".json");
+			}
+		}
+		
+	}
+
+	public function test_buy($symbol, $amount){
+		
+	    //print_r($this->getAmount("buy"));
+	    $callJson = $this->getAmount("sell");
+	    //print_r($this->exchange->api()->exchangeInfo());
 	    //print_r($callJson["price"]); exit();
-		$order = $this->exchange->api()->buy($symbol, $callJson["amount"], $callJson["price"]);
-		print_r($order);
+		//$order = $this->exchange->api()->sell($symbol, $callJson["amount"], $callJson["price"]);
+		//print_r($order);
 	}
 
 	public function getDefaultTrend(){
 		
 		$data = $this->exchange->getBalances();
 		foreach ($data as $key => $value) {
-			if($key !== "BTC" && $key !== "USDT"){
+			if($key !== "BTC" && $key !== "USDT" && isset($this->symbolConfig->{$key."BTC"})){
 				file_put_contents(__DIR__."/orders/".$key."BTC.json",json_encode(["prices" => "", "amount" => number_format(array_sum($value),8,".","")]));
 			}
 		}
@@ -300,6 +315,7 @@ class Strategies{
 	private function getSymbol(){
 		$symbol = substr($this->symbol, -3);
 		$symbol2 = substr($this->symbol, -4);
+
 		$gsymbol = "";
 		if ($symbol === 'BTC') {
 			$gsymbol = str_replace('BTC','', $this->symbol);
@@ -311,36 +327,64 @@ class Strategies{
 	}
 
 	private function getAmount($type="none"){
-		if($type == "none") return 0;
+		if($type !== "buy" || $type !== "sell" ) return 0;
+		
+		//$this->symbol = "LUNBTC";
 		$symbol = $this->symbol;
 		//$config = $this->symbolConfig->{$symbol};
-		$config = new stdClass;
-		$config->currency = 0.01;
-		$this->symbol = "LUNBTC";
+		//$config = new stdClass;
+
 		$depth = $this->exchange->api()->depth($this->symbol);
 
 		
 	    
 	    if($type == "buy"){
-	    	$bid = $this->calPrices(array_keys($depth["bids"])[0], 0.4, "buy");//Buy
-		    $amount = $config->currency / $bid;
+	    	$bid = $this->calPrices(array_keys($depth["bids"])[0], "buy");//Buy
+
+	    	$readAmount = $this->exchange->getBalance($this->getSymbol());
+		    $amount2 = array_sum([$readAmount["available"],$readAmount["onOrder"]]);
+
+		    $amount = ($config->currency / $bid) - $amount2;
+		    
+
 		    return ["amount" => number_format($amount,2,".",""), "price" => number_format($bid,8,".","")];
 		}else if($type == "sell"){
-			$ask = $this->calPrices(array_keys($depth["asks"])[0], 0.4, "sell");//Sell
+			
+			$ask = $this->calPrices(array_keys($depth["asks"])[0], "sell");//Sell
 			$amount = $this->exchange->getBalance($this->getSymbol())["available"];
+
 			return ["amount" => number_format($amount,2,".",""), "price" => number_format($ask,8,".","")];
 		}
 
 	}
 
 
-	private function calPrices($prices, $profit, $target=""){
+	private function calPrices($prices, $target=""){
 		if(!$target) return "";
-		if($target == "sell"){
-			$price = (($prices * $profit)/100) + $prices;
-		}else if($target == "buy"){
-			$price = $prices - (($prices * $profit)/100);
-		}
+		$getIngo = $this->pairInfo->{$this->symbol};
+	    $calProfit = $this->symbolConfig->{$this->symbol};
+
+	    if(isset($this->pairInfo->{$this->symbol}) && isset($getIngo->tickSize)){
+	    	
+
+	    	if($target == "sell"){
+		    	$price = ($getIngo->tickSize * $calProfit->updownprices) + $prices;
+		    }else if($target == "buy"){
+		    	$price = $prices - ($getIngo->tickSize * $calProfit->updownprices);
+		    }
+
+	    }else{
+
+	    	if($calProfit->updownprices > 0.2) $calProfit->updownprices = 0.2;// fix updown
+
+	    	if($target == "sell"){
+				$price = (($prices * $calProfit->updownprices)/100) + $prices;
+			}else if($target == "buy"){
+				$price = $prices - (($prices * $calProfit->updownprices)/100);
+			}
+	    }
+
+		
 		return $price;
 	}
 

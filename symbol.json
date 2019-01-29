@@ -1,32 +1,21 @@
 {
-	"ETHBTC" : {
-		"currency": "0.1",
-  		"asset": "0",
-  		"profit" : "0.75"
-	},
+
 	"LUNBTC" : {
 		"currency": "0.1",
   		"asset": "0",
-  		"profit" : "0.75"
+  		"profit" : "0.75",
+  		"updownprices" : "20"
 	},
 	"PPTBTC" : {
 		"currency": "0.1",
   		"asset": "0",
-  		"profit" : "0.75"
+  		"profit" : "0.75",
+  		"updownprices" : "20"
 	},
 	"ETCBTC" : {
 		"currency": "0.1",
   		"asset": "0",
-  		"profit" : "0.75"
-	},
-	"BNBBTC" : {
-		"currency": "0.1",
-  		"asset": "0",
-  		"profit" : "0.75"
-	},
-	"OAXBTC" : {
-		"currency": "0.1",
-  		"asset": "0",
-  		"profit" : "0.75"
+  		"profit" : "0.75",
+  		"updownprices" : "20"
 	}
 }

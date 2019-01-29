@@ -2,7 +2,7 @@
 class Exchange{
 	public $api;
 	public $balances = [];
-	public $test = false;
+	public $test = true;
 	function __construct()
 	{
 		if(!$this->api){
@@ -45,7 +45,26 @@ class Exchange{
 	public function buy($symbol,$amount, $prices){
 		$val_btc = $this->getBalance("BTC");
 		if(!$this->test && $val_btc > 0.001){
-			$data = $this->api()->buy($symbol, $amount, $prices, "LIMIT");
+			//$data = $this->api()->buy($symbol, $amount, $prices, "LIMIT");
+		}else{
+			$data = array(
+			    "symbol" => $symbol,
+			    "orderId" => "34060160",
+			    "clientOrderId" => "OrrtURrf26EBf6U3YhJ4XU",
+			    "transactTime" => time() * 1000,
+			    "price" => $prices,
+			    "origQty" => $amount,
+			    "executedQty" => 0,
+			    "cummulativeQuoteQty" => 0,
+			    "status" => "NEW",
+			    "timeInForce" => "GTC",
+			    "type" => "LIMIT",
+			    "side" => "BUY",
+			    "fills" => []
+
+			);
+
+	    
 		}
 		/*
 		Reset Balance
@@ -56,14 +75,46 @@ class Exchange{
 	}
 
 	public function sell($symbol,$amount, $prices){
-		$val_btc = $this->getBalance($symbol);
-		if(!$this->test){
-			
+		$valAmount = $this->getBalance($symbol);
+		if(!$this->test && $valAmount >= $amount){
+			//$data = $this->api()->sell($symbol, $amount, $prices, "LIMIT");
+		}else{
+			$data = array(
+			    "symbol" => $symbol,
+			    "orderId" => "34060160",
+			    "clientOrderId" => "OrrtURrf26EBf6U3YhJ4XU",
+			    "transactTime" => time() * 1000,
+			    "price" => $prices,
+			    "origQty" => $amount,
+			    "executedQty" => 0,
+			    "cummulativeQuoteQty" => 0,
+			    "status" => "NEW",
+			    "timeInForce" => "GTC",
+			    "type" => "LIMIT",
+			    "side" => "SELL",
+			    "fills" => []
+
+			);
 		}
 		/*
 		Reset Balance
 		*/
 		$this->getBalances();
+	}
+
+	public function makeExchangeInfo(){
+		$data = $this->api()->exchangeInfo();
+		$arv = [];
+		foreach ($data["symbols"] as $key => $value) {
+			if($value["quoteAsset"] === "BTC" || $value["quoteAsset"] === "USDT" || $value["quoteAsset"] === "ETH" || $value["quoteAsset"] == "BNB"){
+				$arv[$value["symbol"]] = [
+					"status" => $value["status"],
+					"minPrice" => (isset($value["filters"][0]["filterType"]) && $value["filters"][0]["filterType"] == "PRICE_FILTER" ? $value["filters"][0]["minPrice"] : "auto"),
+					"tickSize" => (isset($value["filters"][0]["filterType"]) && $value["filters"][0]["filterType"] == "PRICE_FILTER" ? $value["filters"][0]["tickSize"] : "auto")
+				];
+			}
+		}
+		file_put_contents(__DIR__."/infoexchange.json", json_encode($arv));
 	}
 }
 ?>

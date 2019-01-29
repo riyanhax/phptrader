@@ -12,7 +12,8 @@ $strategies = new Strategies;
 //print_r($exchange->getBalance("LUN"));
 $strategies->exchange = $exchange;
 $strategies->loadconfig();
-
+$strategies->exchange->makeExchangeInfo();
+$strategies->pairInfo = json_decode(file_get_contents(__DIR__."/infoexchange.json"));
 $pair = json_decode(file_get_contents(__DIR__."/symbol.json"));
 
 $pairs = [];
@@ -21,7 +22,10 @@ foreach ($pair as $key => $value) {
 }
 $strategies->setSymbolConfig($pair);
 $strategies->getDefaultTrend();
-$strategies->test_buy("LUNBTC",5);exit();
+$arvStart = $strategies->exchange->getBalances();
+file_put_contents(__DIR__."/balance.json", json_encode($arvStart)) ;
+
+//$strategies->test_buy("LUNBTC",5);exit();
 $strategies->exchange->api()->chart($pairs, "1m", function($api, $symbol, $chart) use ($strategies){
 	//echo "{$symbol} chart update\n";
 	//print_r($chart);
