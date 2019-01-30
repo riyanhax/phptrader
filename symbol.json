@@ -1,20 +1,8 @@
 {
 
 	"LUNBTC" : {
-		"currency": "0.1",
-  		"asset": "0",
-  		"profit" : "0.75",
-  		"updownprices" : "20"
-	},
-	"PPTBTC" : {
-		"currency": "0.1",
-  		"asset": "0",
-  		"profit" : "0.75",
-  		"updownprices" : "20"
-	},
-	"ETCBTC" : {
-		"currency": "0.1",
-  		"asset": "0",
+		"currency": "0",
+  		"asset": "113",
   		"profit" : "0.75",
   		"updownprices" : "20"
 	}

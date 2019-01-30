@@ -94,63 +94,32 @@ class Strategies{
 		$action = $this->checkStatus();
 
 
-		$this->cacheTable = [];
+		
 
-		if( $rsi < $rsi_low && $BBtrend_zone == 'low' && $action !== "wait_sell") {
-			
-			$action = "BUY";
-			$this->cacheTable = [
-				"Date" => date("d-m-Y h:i:s"),
-				"Symbol" => $this->symbol,
-				"Prices" => $price,
-				"BULL_RSI" => $BULL_RSI, 
-				"BEAR_RSI" => $BEAR_RSI,
-				"maSlow" => $maSlow,
-				"maFast" => $maFast,
-				"BBupper" => $BBands["upper"],
-				"BBmiddle" => $BBands["middle"],
-				"BBlower" => $BBands["lower"],
-				"ADX" => $adx,
-				"Action" => $action,
-				"Trend" => $trend
-			];
+		if( $rsi < $rsi_low && $BBtrend_zone == 'low') {// && $action !== "wait_sell"
 
 			$this->action_buy();
 
-		}else if( $rsi > $rsi_hi && $price >= $priceUpperBB && $action !== "wait_buy") {
-			$action = "SELL";
+		}else if( $rsi > $rsi_hi && $price >= $priceUpperBB) {// && $action !== "wait_buy"
 			
-			$this->cacheTable = [
-				"Date" => date("d-m-Y h:i:s"),
-				"Symbol" => $this->symbol,
-				"Prices" => $price,
-				"BULL_RSI" => $BULL_RSI, 
-				"BEAR_RSI" => $BEAR_RSI,
-				"maSlow" => $maSlow,
-				"maFast" => $maFast,
-				"BBupper" => $BBands["upper"],
-				"BBmiddle" => $BBands["middle"],
-				"BBlower" => $BBands["lower"],
-				"ADX" => $adx,
-				"Action" => $action,
-				"Trend" => $trend
-			];
 			$this->action_sell();
 		}
+		if($action === "wait_sell"){
+			$cache_amount = $this->exchange->getBalanceSymbol($this->symbol);
+		}else{
+			$cache_amount = $this->exchange->getBalanceSymbol($this->symbol) - $this->symbolConfig->{$this->symbol}->asset;
+		}
+		
 
 		$table = [
 			[
 				"Date" => date("d-m-Y h:i:s"),
 				"Symbol" => $this->symbol,
 				"Prices" => $price,
-				"RSI14"	=> $RSI14,
+				"Amount" => number_format($cache_amount,2,".",""),
+				"SumBTC" => number_format(($cache_amount) * $price,8,".",""),
 				"BULL_RSI" => $BULL_RSI, 
 				"BEAR_RSI" => $BEAR_RSI,
-				"maSlow" => $maSlow,
-				"maFast" => $maFast,
-				"BBupper" => $BBands["upper"],
-				"BBmiddle" => $BBands["middle"],
-				"BBlower" => $BBands["lower"],
 				"ADX" => $adx,
 				"Action" => $action,
 				"Trend" => $trend
@@ -267,8 +236,7 @@ class Strategies{
 	    */
 
 		if(is_array($order)){
-			$arv = json_encode(array_merge($arvs, $this->cacheTable, $order));
-			file_put_contents(__DIR__."/orders/".$this->symbol.".json",$arv);
+			file_put_contents(__DIR__."/orders/".$this->symbol.".json",json_encode($order));
 		}
 	}
 
@@ -280,12 +248,11 @@ class Strategies{
 			$order = $this->exchange->sell($this->symbol, $callJson["amount"], $callJson["price"]);
 
 			if($order){
-				$sell_order = json_encode(array_merge($order, $this->cacheTable));
+				$sell_order = json_encode($order);
 				$buy_order = file_get_contents(__DIR__."/orders/".$this->symbol.".json");
-
 				$arv_report = json_encode(["buy" => $buy_order, "sell" => $sell_order]);
-
 				file_put_contents(__DIR__."/report/".$this->symbol."-".date("d-m-Y")."-".".json",$arv_report);
+
 				unlink(__DIR__."/orders/".$this->symbol.".json");
 			}
 		}
@@ -313,17 +280,7 @@ class Strategies{
 	}
 
 	private function getSymbol(){
-		$symbol = substr($this->symbol, -3);
-		$symbol2 = substr($this->symbol, -4);
-
-		$gsymbol = "";
-		if ($symbol === 'BTC') {
-			$gsymbol = str_replace('BTC','', $this->symbol);
-		}else if($symbol2 === 'USDT'){
-			$gsymbol = str_replace('USDT','', $this->symbol);
-		}
-
-		return $gsymbol;
+		return str_replace('BTC','', $this->symbol);
 	}
 
 	private function getAmount($type="none"){
@@ -342,12 +299,19 @@ class Strategies{
 	    	$bid = $this->calPrices(array_keys($depth["bids"])[0], "buy");//Buy
 
 	    	$readAmount = $this->exchange->getBalance($this->getSymbol());
+
+	    	$asset_fix_amount = $this->symbolConfig->{$this->symbol}->asset;
+	    	$cal_amount = ($config->currency / $bid);
+	    	
+	    	if($cal_amount >= $asset_fix_amount) $cal_amount = $asset_fix_amount;
+
 		    $amount2 = array_sum([$readAmount["available"],$readAmount["onOrder"]]);
 
-		    $amount = ($config->currency / $bid) - $amount2;
+		    $amount = $cal_amount - $amount2;
 		    
 
 		    return ["amount" => number_format($amount,2,".",""), "price" => number_format($bid,8,".","")];
+
 		}else if($type == "sell"){
 			
 			$ask = $this->calPrices(array_keys($depth["asks"])[0], "sell");//Sell

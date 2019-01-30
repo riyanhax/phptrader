@@ -41,11 +41,24 @@ class Exchange{
 	        ];
 		}
 	}
+	public function getBalanceSymbol($symbol){
+		$symbol = str_replace('BTC', '', $symbol);
+		if(isset($this->balances[$symbol])){
+			return array_sum([$this->balances[$symbol]["available"], $this->balances[$symbol]["onOrder"]]);
+		}
+		return 0;
+	}
+
+	public function getBalanceAvalible($symbol){
+		if(!$this->balances)$this->getBalances();
+		return $this->balances[$symbol]["available"];
+		
+	}
 
 	public function buy($symbol,$amount, $prices){
 		$val_btc = $this->getBalance("BTC");
 		if(!$this->test && $val_btc > 0.001){
-			//$data = $this->api()->buy($symbol, $amount, $prices, "LIMIT");
+			$data = $this->api()->buy($symbol, $amount, $prices, "LIMIT");
 		}else{
 			$data = array(
 			    "symbol" => $symbol,
@@ -77,7 +90,7 @@ class Exchange{
 	public function sell($symbol,$amount, $prices){
 		$valAmount = $this->getBalance($symbol);
 		if(!$this->test && $valAmount >= $amount){
-			//$data = $this->api()->sell($symbol, $amount, $prices, "LIMIT");
+			$data = $this->api()->sell($symbol, $amount, $prices, "LIMIT");
 		}else{
 			$data = array(
 			    "symbol" => $symbol,
@@ -106,7 +119,7 @@ class Exchange{
 		$data = $this->api()->exchangeInfo();
 		$arv = [];
 		foreach ($data["symbols"] as $key => $value) {
-			if($value["quoteAsset"] === "BTC" || $value["quoteAsset"] === "USDT" || $value["quoteAsset"] === "ETH" || $value["quoteAsset"] == "BNB"){
+			if($value["quoteAsset"] === "BTC"){
 				$arv[$value["symbol"]] = [
 					"status" => $value["status"],
 					"minPrice" => (isset($value["filters"][0]["filterType"]) && $value["filters"][0]["filterType"] == "PRICE_FILTER" ? $value["filters"][0]["minPrice"] : "auto"),
